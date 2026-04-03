@@ -1,8 +1,14 @@
 # THY-Twin
 
-This repository contains the example code and data for the paper:
+<p align="center">
+  <img src="assets/overview.jpg" width="80%">
+</p>
 
-**THY-Twin: A Digital Navigation and Auditing Twin for Ultrasound-Guided Thyroid Ablation**
+<p align="center">
+  <strong>THY-Twin: A Digital Navigation and Auditing Twin for Ultrasound-Guided Thyroid Ablation</strong>
+</p>
+
+This repository contains the example code and data for the above paper.
 
 ## Overview
 
