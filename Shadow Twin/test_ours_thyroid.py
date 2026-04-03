@@ -10,7 +10,7 @@ import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
 from torch.autograd import Variable
-from networks.dual_fusionNet_ori import RegistNetwork
+from networks.dual_fusionNet import RegistNetwork
 from lib.loss import regularization_loss
 from lib.utils import setup_logger
 import tools

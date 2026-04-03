@@ -12,7 +12,6 @@ from copy import copy
 import numpy as np
 from torch.nn import init, Sequential
 import cv2
-import torchvision
 
 from networks.resnext import resnext50_32x4d
 from networks.resnext_fvr_ori import ResNeXtBottleneck, downsample_basic_block
@@ -26,75 +25,35 @@ psp_models = {
     'resnet50': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, backend='resnet50'),
 }
 
-class ViewClassifier(nn.Module):
-    def __init__(self, checkpoint_path, device='cuda'):
-        super(ViewClassifier, self).__init__()
-        self.device = device
-        
-        # Initialize the model
-        self.model = torchvision.models.convnext_base()
-        self.model.classifier[-1] = nn.Linear(
-            self.model.classifier[-1].in_features, 11
-        )
-        
-        # Load checkpoint
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-        state_dict = {key[6:]: value for key, value in checkpoint['state_dict'].items()}
-        self.model.load_state_dict(state_dict)
-        
-        # Set model to evaluation mode and freeze parameters
-        self.model.to(device)
-        self.model.eval()
-        for param in self.model.parameters():
-            param.requires_grad = False
-    
-    def forward(self, x):
-        """Forward pass through the view classifier
-        Args:
-            x: Input tensor of shape [N, C, H, W] or [N, C, T, H, W]
-                If 5D input, will use first frame (T=0)
-        Returns:
-            stack_of_view_encodings: One-hot encoded view classifications [N, 11]
-        """
-        # Handle 5D input (video) by taking first frame
-        if x.dim() == 5:
-            x = x[:, :, 0, :, :]  # [N, C, H, W]
-        
-        with torch.no_grad():
-            out_logits = self.model(x)  # [N, 11]
-            out_views = torch.argmax(out_logits, dim=1)  # [N]
-            stack_of_view_encodings = torch.nn.functional.one_hot(out_views, 11).to(self.device)  # [N, 11]
-        
-        return stack_of_view_encodings
 
 # Copy from PVN3D: https://github.com/ethnhe/PVN3D
 class DenseFusion(nn.Module):
     def __init__(self, num_points=1024):
         super(DenseFusion, self).__init__()
-        self.conv2_rgb = torch.nn.Conv1d(75, 256, 1)
-        self.conv2_cld = torch.nn.Conv1d(75, 256, 1)
+        self.conv2_rgb = torch.nn.Conv1d(64, 256, 1)
+        self.conv2_cld = torch.nn.Conv1d(64, 256, 1)
 
-        self.conv3 = torch.nn.Conv1d(150, 512, 1)
+        self.conv3 = torch.nn.Conv1d(128, 512, 1)
         self.conv4 = torch.nn.Conv1d(512, 1024, 1)
 
         self.ap1 = torch.nn.AvgPool1d(num_points)
 
     def forward(self, rgb_emb, cld_emb):
         bs, _, n_pts = cld_emb.size()
-        feat_1 = torch.cat((rgb_emb, cld_emb), dim=1)
+        feat_1 = torch.cat((rgb_emb, cld_emb), dim=1) #torch.Size([8, 128, 16384])
         rgb = F.relu(self.conv2_rgb(rgb_emb))
         cld = F.relu(self.conv2_cld(cld_emb))
 
-        feat_2 = torch.cat((rgb, cld), dim=1)
+        feat_2 = torch.cat((rgb, cld), dim=1) #torch.Size([8, 512, 16384])
 
-        rgbd = F.relu(self.conv3(feat_1))
-        rgbd = F.relu(self.conv4(rgbd))
+        rgbd = F.relu(self.conv3(feat_1)) #torch.Size([8, 512, 16384])
+        rgbd = F.relu(self.conv4(rgbd)) #torch.Size([8, 1024, 16384])
 
-        ap_x = self.ap1(rgbd)
+        ap_x = self.ap1(rgbd) #torch.Size([8, 1024, 1])
 
-        feat_3 = ap_x.view(-1, 1024, 1).repeat(1, 1, n_pts)
+        feat_3 = ap_x.view(-1, 1024, 1).repeat(1, 1, n_pts) #torch.Size([8, 1024, 16384])
 
-        fused = torch.cat([feat_1, feat_2, feat_3], 1)  # 256+ 512 + 1024 = 1792
+        fused = torch.cat([feat_1, feat_2, feat_3], 1)  # torch.Size([8, 1664, 16384])
         
         return fused
 
@@ -385,13 +344,13 @@ class myTransformerBlock(nn.Module):
 class RegistNetwork(nn.Module):
     """ First working model! """
     def __init__(self, layers):
-        self.inplanes = 128
+        self.inplanes = 512
         super(RegistNetwork, self).__init__()
         """ Balance """
         layers = layers
         self.TransLayers = 4
         self.bn_momentum = 0.75
-        self.view_classifier = ViewClassifier(checkpoint_path='/data/shenchengkang/sck/CU-Reg/view_classifier.ckpt')
+
         # frame feature
         self.frameemb = psp_models['resnet34'.lower()]()
         # layers = [3, 4, 6, 3]  # resnext50
@@ -425,9 +384,9 @@ class RegistNetwork(nn.Module):
         self.volPath_CrossAtt = NLBlockND_cross(64)
         
         ############# feature fusion layer #######
-        self.densefusion = DenseFusion(num_points=4096)
+        self.densefusion = DenseFusion(num_points=16384) #4096
         self.reduce_layer = (
-            pt_utils.Seq(1686)
+            pt_utils.Seq(1664)
             .conv1d(1024, activation=nn.ReLU())
             .conv1d(512,activation=nn.ReLU())
             .conv1d(128,activation=nn.ReLU())
@@ -552,9 +511,9 @@ class RegistNetwork(nn.Module):
         # print('seg_feature {}'.format(seg_feature.shape)) # [bs, 128, 128, 1]
         # print('seg_feature {}'.format(seg_feature)) # [bs, 128, 128, 1]
 
-        frame = self.relu(self.convdown_frame_1(frame)) # 
+        frame = self.relu(self.convdown_frame_1(frame)) # [bs, 64, 16, 32, 32]
 
-        frame = self.relu(self.convdown_frame_2(frame)) # [bs, 64, 64, 64]
+        frame = self.relu(self.convdown_frame_2(frame)) # [bs, 64, 16, 32, 32]
 
         frame = frame.unsqueeze(2)
         
@@ -572,20 +531,19 @@ class RegistNetwork(nn.Module):
         #return (frame, seg_feature)
         return frame
 
-    def forward(self, vol, frame1, device=None):
+    def forward(self, vol, frame, device=None):
         input_vol = vol.clone()# [bs, 1, 40, 160, 160]
-        vol = F.interpolate(vol, size=(32, 128, 128), mode='trilinear', align_corners=True)  # [bs, 1, 40, 160, 160] -> [bs, 1, 32, 128, 128]
-        #print('vol shape: ', vol.shape)
-        frame = F.interpolate(frame1, size=(1, 128, 128), mode='trilinear', align_corners=True)  
+        vol = F.interpolate(vol, size=(128, 128, 128), mode='trilinear', align_corners=True)  # [bs, 1, 40, 160, 160] -> [bs, 1, 32, 128, 128]
+        frame = F.interpolate(frame, size=(1, 128, 128), mode='trilinear', align_corners=True)  
         
 
         ##### vol and frame feature extraction ###
-        vol_emb = self.volBranch(vol)  # [bs, 64, 5, 40, 40] 
-        T_size = vol_emb.size(2) #5
+        vol_emb = self.volBranch(vol)  # [bs, 64, 16, 32, 32] 
+        T_size = vol_emb.size(2) #16
         #frame_emb, seg_feat = self.frameBranch(frame)
-        frame_emb = self.frameBranch(frame)  # [bs, 64, 5, 40, 40]
+        frame_emb = self.frameBranch(frame)  # [bs, 64, 1, 32, 32]
         # print('seg_feature {}'.format(seg_feat.shape)) # [bs, 128, 128, 1]
-        frame_emb = frame_emb.repeat(1,1,T_size,1,1) ## [bs, 64, 1, 32, 32] - > [bs, 64, 5, 40, 40]
+        frame_emb = frame_emb.repeat(1,1,T_size,1,1) ## [bs, 64, 1, 32, 32] - > [bs, 64, 16, 32, 32]
 
         ### prompt feat ###
         #prompt_fea = self.convdown_prompt_1(seg_feat)
@@ -596,8 +554,8 @@ class RegistNetwork(nn.Module):
         # print("shape of vol_emb and frame_emb and prompt_fea: ", vol_emb.shape, frame_emb.shape, prompt_fea.shape)
 
         ### cross attention ###
-        frame = self.framePath_CrossAtt(frame_emb, vol_emb)
-        vol = self.volPath_CrossAtt(vol_emb, frame_emb)
+        frame = self.framePath_CrossAtt(frame_emb, vol_emb) #[bs, 64, 16, 32, 32]
+        vol = self.volPath_CrossAtt(vol_emb, frame_emb) #[bs, 64, 16, 32, 32]
         
 
         ###################################  prompt feature ###################################
@@ -610,26 +568,14 @@ class RegistNetwork(nn.Module):
 
         # vol = (vol + prompt_fea).view(Bs, 64, -1).contiguous() #[bs, 64, 4, 32, 32]
         # frame = (frame + prompt_fea).view(Bs, 64, -1).contiguous() #[bs, 64, 4, 32, 32] ###### 这里后面可以试试 直接 + 法
-        vol = vol.view(Bs, 64, -1).contiguous() #[bs, 64, 4, 32, 32]
-        frame = frame.view(Bs, 64, -1).contiguous() #[bs, 64, 4, 32, 32]
+        vol = vol.view(Bs, 64, -1).contiguous() #[bs, 64, 16384]
+        frame = frame.view(Bs, 64, -1).contiguous() #[bs, 64, 16384]
         ###################################  prompt feature ###################################
-        frame2 = F.interpolate(frame1, size=(1, 224, 224), mode='trilinear', align_corners=True) 
-        frame2 = frame2.repeat(1, 3, 1, 1, 1)
-        #print('frame2 shape: ', frame2.shape)
-        clas_fea = self.view_classifier(frame2)
-        #print('clas_fea shape: ', clas_fea.shape)
-        clas_fea = clas_fea.view(Bs, 11, 1)
-        clas_fea = clas_fea.expand(-1, -1,vol.shape[2] )
-        #fused = torch.cat([conv_feature, feat_scalar], dim=1)  # 得到 [bs, 64+11, 4, 32, 32]
-        #print('clas_fea shape: ', clas_fea.shape)
-        #print('vol shape: ', vol.shape)
-        #print('frame shape: ', frame.shape)
         
-        vol = torch.cat([vol, clas_fea], dim=1) #[bs, 64+11, 4, 32, 32]这里加class先验
-        frame = torch.cat([frame, clas_fea], dim=1)
         ###################################  densefusion  ###################################
-        
-        densefused_feat = self.densefusion(frame, vol).view(Bs,1686,-1).contiguous() #[bs, 1792, 4, 32, 32]
+        #print('frame shape: ', frame.shape)
+        #print('vol shape: ', vol.shape)
+        densefused_feat = self.densefusion(frame, vol).view(Bs,1664,-1).contiguous() #torch.Size([8, 1664, 16384])
         
         ###################################  densefusion  ###################################
 
@@ -643,7 +589,7 @@ class RegistNetwork(nn.Module):
         #### Transformer encoder ####
         # fused_fea = self.trans_blocks(densefused_feat)# [bs, 256, 4, 32, 32] 
         # fused_fea = self.trans_blocks(densefused_feat).view(Bs,1792,-1).contiguous()  # [bs, 256, 4, 32, 32] 
-        fused_fea = self.reduce_layer(densefused_feat).view(Bs,-1,4,32,32).contiguous()
+        fused_fea = self.reduce_layer(densefused_feat).view(Bs,-1,4,32,32).contiguous() #torch.Size([8, 512, 4, 32, 32])
 
 
         # print('after transformer {}'.format(fused_fea.shape))
@@ -707,7 +653,8 @@ class RegistNetwork(nn.Module):
         
         # print('input_vol {}'.format(input_vol.shape))
         #print('aa',input_vol.shape)
-        input_vol_t = input_vol.permute(0, 1,4, 2, 3)
+        #input_vol_t = input_vol.permute(0, 1,4, 2, 3)、
+        input_vol_t = input_vol.permute(0, 1,4, 3, 2)
         #print('aa',input_vol_t.shape)
         # grid = tools.myAffineGrid2(input_tensor=input_vol_t, input_mat=mat, 
         #                             input_spacing=(1, 1, 1), device=device)
@@ -727,13 +674,11 @@ class RegistNetwork(nn.Module):
         point = tools.get_rays(directions,mat)
 
         #print(point.shape)
-        out_frame_tensor = tools.slice_operator(point, input_vol_t)
-        #print(out_frame_tensor_full.shape)
-        out_frame_tensor = tools.mask(out_frame_tensor)
+        out_frame_tensor_full = tools.slice_operator(point, input_vol_t)
         #print(out_frame_tensor_full.shape)
         #print('need',out_frame_tensor_full.shape)
         #return vol_resampled.detach(), pred_dof, out_frame_tensor_full, pred_interframe_of, seg_feat
-        return pred_dof, out_frame_tensor
+        return pred_dof, out_frame_tensor_full
         #return vol_resampled.detach(), mat, out_frame_tensor_full
     
 if __name__ == '__main__':
