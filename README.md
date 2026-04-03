@@ -197,9 +197,12 @@ For questions or issues, please open an issue on GitHub
 ## Acknowledgments
 
 This work builds upon the following open-source projects:
-[1] Shen, C. et al. CardiacField: Computational echocardiography for automated heart function estimation using two-dimensional echocardiography probes. *Eur. Heart J. Digit. Health* 6, 137–146 (2025).
-[2] Hui, X. et al. Ultrasound-guided needle tracking with deep learning: A novel approach with photoacoustic ground truth. *Photoacoustics* 34, 100575 (2023).
-[3] Lei, L. et al. Epicardium prompt-guided real-time cardiac ultrasound frame-to-volume registration. In *MICCAI* 618–628 (2024).
+
+**[1]** Shen, C. et al. CardiacField: Computational echocardiography for automated heart function estimation using two-dimensional echocardiography probes. *European Heart Journal - Digital Health* 6, 137–146 (2025).
+
+**[2]** Hui, X. et al. Ultrasound-guided needle tracking with deep learning: A novel approach with photoacoustic ground truth. *Photoacoustics* 34, 100575 (2023).
+
+**[3]** Lei, L. et al. Epicardium prompt-guided real-time cardiac ultrasound frame-to-volume registration. In *MICCAI* 618–628 (2024).
 
 We thank the authors for releasing their code. Please also consider citing their work.
 
