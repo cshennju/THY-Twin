@@ -1,14 +1,13 @@
 # THY-Twin
+This repository contains the example code and data for the paper: [**THY-Twin: A Digital Navigation and Auditing Twin for Ultrasound-Guided Thyroid Ablation**](https://cshennju.github.io/THY-Twin.github.io/)
 
 <p align="center">
   <img src="assets/overview.jpg" width="80%">
 </p>
-
 <p align="center">
-  <strong>THY-Twin: A Digital Navigation and Auditing Twin for Ultrasound-Guided Thyroid Ablation</strong>
 </p>
 
-This repository contains the example code and data for the above paper.
+
 
 ## Overview
 
@@ -179,10 +178,10 @@ THY-Twin_Data/
 If you use this code in your research, please cite:
 
 ```bibtex
-@article{thy_twin_2026,
+@article{shen2026thy-twin,
   title={THY-Twin: A Digital Navigation and Auditing Twin for Ultrasound-Guided Thyroid Ablation},
   author={Shen, Chengkang and Zhou, You and Zhu, Hao and Wang, Longqiang and Zhang, XueJing and Cao, Xun and Jiang, Ming and Jin, Yunjie and Lin, Yi and Ma, Zhan},
-  journal={...},
+  journal={},
   year={2026}
 }
 ```
