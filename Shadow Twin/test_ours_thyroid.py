@@ -25,7 +25,7 @@ def ensure_fd(fd):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='CAMUS', help='')
+    parser.add_argument('--dataset', type=str, default='THY', help='')
     parser.add_argument('--dataset_root', type=str, default='', help='dataset root dir')
     parser.add_argument('--batch_size', type=int, default=1, help='batch size')
     parser.add_argument('--workers', type=int, default=10, help='number of data loading workers')
@@ -33,11 +33,11 @@ def main():
     parser.add_argument('--model', type=str, default='trained_model.pth', help='resume model')
     opt = parser.parse_args()
 
-    if opt.dataset == 'CAMUS':
+    if opt.dataset == 'THY':
         opt.outf = './experiments/trained_models/' + opt.dataset
         opt.log_dir = './experiments/logs/' + opt.dataset + '/logtxt'
         opt.results = './experiments/results/' + opt.dataset
-        opt.dataset_root = '/data/shenchengkang/sck/CU-Reg/test_throid/new2'
+        opt.dataset_root = '/data/shenchengkang/sck/Reg/test_throid/new'
     else:
         print('Unknown dataset')
         return
